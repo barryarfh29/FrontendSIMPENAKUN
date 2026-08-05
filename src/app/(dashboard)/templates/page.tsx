@@ -42,7 +42,8 @@ export default function TemplatesPage() {
   const fetchTemplates = async () => {
     try {
       const response = await api.get("/templates/comments");
-      setTemplates(response.data);
+      const resData = response.data;
+      setTemplates(Array.isArray(resData) ? resData : resData?.data || []);
     } catch (err: any) {
       setError("Gagal memuat comment templates.");
     } finally {
@@ -82,9 +83,10 @@ export default function TemplatesPage() {
   const fetchNames = async () => {
     try {
       const response = await api.get("/templates/names");
-      setNames(response.data);
+      const resData = Array.isArray(response.data) ? response.data : response.data?.data || [];
+      setNames(resData);
       setNamesText(
-        response.data.map((n: NameItem) => `${n.first},${n.last}`).join("\n")
+        resData.map((n: NameItem) => `${n.first},${n.last}`).join("\n")
       );
     } catch (err: any) {
       setError("Gagal memuat saved names.");

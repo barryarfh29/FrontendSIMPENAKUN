@@ -29,8 +29,21 @@ export default function LogsPage() {
       const response = await api.get("/logs/pm-tasks", {
         params: { page, limit },
       });
-      setLogs(response.data.data || response.data);
-      setTotal(response.data.total || 0);
+      const resData = response.data;
+      // Handle various response formats
+      if (Array.isArray(resData)) {
+        setLogs(resData);
+        setTotal(resData.length);
+      } else if (resData && Array.isArray(resData.data)) {
+        setLogs(resData.data);
+        setTotal(resData.total || resData.data.length);
+      } else if (resData && Array.isArray(resData.items)) {
+        setLogs(resData.items);
+        setTotal(resData.total || resData.items.length);
+      } else {
+        setLogs([]);
+        setTotal(0);
+      }
     } catch (err: any) {
       setError("Gagal memuat PM logs.");
     } finally {

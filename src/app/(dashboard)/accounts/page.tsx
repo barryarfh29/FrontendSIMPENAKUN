@@ -22,7 +22,16 @@ export default function AccountsPage() {
   const fetchAccounts = async () => {
     try {
       const response = await api.get("/accounts/");
-      setAccounts(response.data);
+      const resData = response.data;
+      if (Array.isArray(resData)) {
+        setAccounts(resData);
+      } else if (resData && Array.isArray(resData.data)) {
+        setAccounts(resData.data);
+      } else if (resData && Array.isArray(resData.accounts)) {
+        setAccounts(resData.accounts);
+      } else {
+        setAccounts([]);
+      }
     } catch (err: any) {
       setError("Gagal memuat daftar akun.");
     } finally {
