@@ -56,12 +56,19 @@ export default function AccountsPage() {
   const fetchAccountDetail = async (userId: number) => {
     setDetailLoading(true);
     setShowModal(true);
+    setError("");
     try {
-      const response = await api.get(`/accounts/${userId}`);
+      const response = await api.get(`/accounts/${userId}/`);
       setSelectedAccount(response.data);
     } catch (err: any) {
-      setError("Gagal memuat detail akun.");
-      setShowModal(false);
+      // Try without trailing slash as fallback
+      try {
+        const response = await api.get(`/accounts/${userId}`);
+        setSelectedAccount(response.data);
+      } catch (err2: any) {
+        setError("Gagal memuat detail akun.");
+        setShowModal(false);
+      }
     } finally {
       setDetailLoading(false);
     }
