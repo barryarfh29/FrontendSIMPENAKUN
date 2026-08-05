@@ -89,7 +89,7 @@ export default function SettingsPage() {
   const addChannel = () => {
     if (!newChannel.trim() || !reactionChannels) return;
     setReactionChannels({
-      channel_ids: [...reactionChannels.channel_ids, newChannel.trim()],
+      channels: [...(reactionChannels.channels || []), newChannel.trim()],
     });
     setNewChannel("");
   };
@@ -97,7 +97,7 @@ export default function SettingsPage() {
   const removeChannel = (index: number) => {
     if (!reactionChannels) return;
     setReactionChannels({
-      channel_ids: reactionChannels.channel_ids.filter((_, i) => i !== index),
+      channels: (reactionChannels.channels || []).filter((_, i) => i !== index),
     });
   };
 
@@ -273,7 +273,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-2">
-            {reactionChannels?.channel_ids.map((id, index) => (
+            {(reactionChannels?.channels || []).map((id, index) => (
               <div
                 key={index}
                 className="flex items-center justify-between rounded-md border px-3 py-2"
@@ -288,7 +288,7 @@ export default function SettingsPage() {
                 </Button>
               </div>
             ))}
-            {reactionChannels?.channel_ids.length === 0 && (
+            {(!reactionChannels?.channels || reactionChannels.channels.length === 0) && (
               <p className="text-sm text-muted-foreground">
                 Belum ada channel yang ditambahkan.
               </p>

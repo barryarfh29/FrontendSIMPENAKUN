@@ -69,7 +69,7 @@ export interface NameItem {
 }
 
 export interface ReactionChannels {
-  channel_ids: string[];
+  channels: (string | number)[];
 }
 
 export interface LoginRequest {
