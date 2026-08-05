@@ -45,6 +45,7 @@ export default function AccountsPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncDelay, setSyncDelay] = useState(2);
 
   // Detail modal
   const [selectedAccount, setSelectedAccount] = useState<AccountDetail | null>(null);
@@ -298,7 +299,7 @@ export default function AccountsPage() {
     try {
       const token = localStorage.getItem("simpenakun_token");
       const res = await fetch(
-        "https://api.simpenakun.site/api/accounts/sync-profiles",
+        `https://api.simpenakun.site/api/accounts/sync-profiles?delay=${syncDelay}`,
         { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) } }
       );
       const data = await res.json();
@@ -342,14 +343,32 @@ export default function AccountsPage() {
             Kelola akun Telegram yang terdaftar ({accounts.length} akun)
           </p>
         </div>
-        <Button onClick={handleSyncProfiles} disabled={syncing}>
-          {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <User className="mr-2 h-4 w-4" />}
-          {syncing ? "Syncing..." : "Sync All Profiles"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={syncDelay}
+            onChange={(e) => setSyncDelay(Number(e.target.value))}
+            disabled={syncing}
+          >
+            <option value={2}>2s delay</option>
+            <option value={3}>3s delay</option>
+            <option value={5}>5s delay</option>
+            <option value={10}>10s delay</option>
+          </select>
+          <Button onClick={handleSyncProfiles} disabled={syncing}>
+            {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <User className="mr-2 h-4 w-4" />}
+            {syncing ? "Syncing..." : "Sync All"}
+          </Button>
+        </div>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {successMsg && <p className="text-sm text-green-500">{successMsg}</p>}
+      {syncing && (
+        <p className="text-sm text-muted-foreground">
+          Estimasi: ~{Math.ceil((accounts.length * syncDelay) / 60)} menit ({accounts.length} akun × {syncDelay}s)
+        </p>
+      )}
 
       <Card>
         <CardHeader>
