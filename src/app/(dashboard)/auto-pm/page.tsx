@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loading } from "@/components/loading";
 import api from "@/lib/api";
 import type { AutoPMSettings, PMTaskLogItem } from "@/types";
-import { Loader2, Save, Trash2, ChevronLeft, ChevronRight, Plus, Play, Square, Link2, Pencil } from "lucide-react";
+import { Loader2, Save, Trash2, ChevronLeft, ChevronRight, Plus, Play, Square, Link2, Pencil, Eraser } from "lucide-react";
 
 export default function AutoPMPage() {
   const [settings, setSettings] = useState<AutoPMSettings | null>(null);
@@ -235,6 +235,64 @@ export default function AutoPMPage() {
     }
   };
 
+  // Clear Chat
+  const [clearingChatId, setClearingChatId] = useState<string | null>(null);
+  const [manualClearUserId, setManualClearUserId] = useState("");
+  const [manualClearTarget, setManualClearTarget] = useState("0");
+  const [manualClearRevoke, setManualClearRevoke] = useState(true);
+  const [manualClearing, setManualClearing] = useState(false);
+
+  const handleClearChatRow = async (userId: number, targetChatId: string) => {
+    const key = `${userId}-${targetChatId}`;
+    setClearingChatId(key);
+    try {
+      const res = await fetch("https://api.simpenakun.site/api/actions/clear-chat", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ user_id: userId, target_chat_id: Number(targetChatId) || 0, revoke: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showSuccess(data.message || "Clear chat berhasil!");
+        await fetchLogs();
+      } else {
+        setError(data.message || "Clear chat gagal.");
+      }
+    } catch {
+      setError("Gagal clear chat.");
+    } finally {
+      setClearingChatId(null);
+    }
+  };
+
+  const handleManualClearChat = async () => {
+    if (!manualClearUserId) { setError("User ID harus diisi."); return; }
+    setManualClearing(true);
+    setError("");
+    try {
+      const res = await fetch("https://api.simpenakun.site/api/actions/clear-chat", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          user_id: Number(manualClearUserId),
+          target_chat_id: Number(manualClearTarget) || 0,
+          revoke: manualClearRevoke,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showSuccess(data.message || "Clear chat berhasil!");
+        await fetchLogs();
+      } else {
+        setError(data.message || "Clear chat gagal.");
+      }
+    } catch {
+      setError("Gagal clear chat.");
+    } finally {
+      setManualClearing(false);
+    }
+  };
+
   const handleClearCompleted = async () => {
     setClearing(true);
     try {
@@ -444,6 +502,36 @@ export default function AutoPMPage() {
         </CardContent>
       </Card>
 
+      {/* Manual Clear Chat */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Manual Clear Chat</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Clear chat dari akun ke target. Set Target = 0 untuk clear semua pending dari akun tersebut.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Account ID (user_id)</Label>
+              <Input type="number" placeholder="6096280434" value={manualClearUserId} onChange={(e) => setManualClearUserId(e.target.value)} disabled={manualClearing} />
+            </div>
+            <div className="space-y-2">
+              <Label>Target Chat ID (0 = semua pending)</Label>
+              <Input type="number" placeholder="0" value={manualClearTarget} onChange={(e) => setManualClearTarget(e.target.value)} disabled={manualClearing} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="revoke-check" checked={manualClearRevoke} onChange={(e) => setManualClearRevoke(e.target.checked)} className="rounded" />
+            <Label htmlFor="revoke-check">Hapus kedua sisi (revoke)</Label>
+          </div>
+          <Button className="w-full" onClick={handleManualClearChat} disabled={manualClearing}>
+            {manualClearing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
+            Clear Now
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* PM Logs */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -464,21 +552,35 @@ export default function AutoPMPage() {
                       <th className="px-3 py-2 text-left font-medium">Target</th>
                       <th className="px-3 py-2 text-left font-medium">Status</th>
                       <th className="px-3 py-2 text-left font-medium">PM Sent</th>
-                      <th className="px-3 py-2 text-left font-medium">Clear At</th>
                       <th className="px-3 py-2 text-center font-medium">Cleared</th>
+                      <th className="px-3 py-2 text-right font-medium">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {logs.map((log) => (
-                      <tr key={log.id} className="border-b">
-                        <td className="px-3 py-2 font-mono text-xs">{log.user_id}</td>
-                        <td className="px-3 py-2 font-mono text-xs">{log.target_chat_id}</td>
-                        <td className="px-3 py-2">{getStatusBadge(log.status)}</td>
-                        <td className="px-3 py-2 text-xs">{log.pm_sent_at ? new Date(log.pm_sent_at).toLocaleString("id-ID") : "-"}</td>
-                        <td className="px-3 py-2 text-xs">{log.clear_chat_at ? new Date(log.clear_chat_at).toLocaleString("id-ID") : "-"}</td>
-                        <td className="px-3 py-2 text-center">{log.is_cleared ? "✅" : "❌"}</td>
-                      </tr>
-                    ))}
+                    {logs.map((log) => {
+                      const rowKey = `${log.user_id}-${log.target_chat_id}`;
+                      return (
+                        <tr key={log.id} className="border-b">
+                          <td className="px-3 py-2 font-mono text-xs">{log.user_id}</td>
+                          <td className="px-3 py-2 font-mono text-xs">{log.target_chat_id}</td>
+                          <td className="px-3 py-2">{getStatusBadge(log.status)}</td>
+                          <td className="px-3 py-2 text-xs">{log.pm_sent_at ? new Date(log.pm_sent_at).toLocaleString("id-ID") : "-"}</td>
+                          <td className="px-3 py-2 text-center">{log.is_cleared ? "✅" : "❌"}</td>
+                          <td className="px-3 py-2 text-right">
+                            {!log.is_cleared && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleClearChatRow(log.user_id, log.target_chat_id)}
+                                disabled={clearingChatId === rowKey}
+                              >
+                                {clearingChatId === rowKey ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eraser className="h-3 w-3" />}
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {logs.length === 0 && (
                       <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">Tidak ada log.</td></tr>
                     )}
