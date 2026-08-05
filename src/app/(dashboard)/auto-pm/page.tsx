@@ -249,7 +249,7 @@ export default function AutoPMPage() {
       const res = await fetch("https://api.simpenakun.site/api/actions/clear-chat", {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ user_id: userId, target_chat_id: Number(targetChatId) || 0, revoke: true }),
+        body: JSON.stringify({ user_id: userId, target_chat_id: parseInt(targetChatId) || 0, revoke: true }),
       });
       const data = await res.json();
       if (data.success) {
@@ -266,7 +266,12 @@ export default function AutoPMPage() {
   };
 
   const handleManualClearChat = async () => {
-    if (!manualClearUserId) { setError("User ID harus diisi."); return; }
+    const uid = Number(manualClearUserId) || 0;
+    const tid = Number(manualClearTarget) || 0;
+    if (uid === 0 && tid === 0) {
+      setError("Harus isi Account ID atau Target Chat ID (atau keduanya).");
+      return;
+    }
     setManualClearing(true);
     setError("");
     try {
@@ -274,8 +279,8 @@ export default function AutoPMPage() {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          user_id: Number(manualClearUserId),
-          target_chat_id: Number(manualClearTarget) || 0,
+          user_id: uid,
+          target_chat_id: tid,
           revoke: manualClearRevoke,
         }),
       });
@@ -508,17 +513,20 @@ export default function AutoPMPage() {
           <CardTitle>Manual Clear Chat</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-xs text-muted-foreground">
-            Clear chat dari akun ke target. Set Target = 0 untuk clear semua pending dari akun tersebut.
-          </p>
+          <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
+            <p><strong>Kombinasi:</strong></p>
+            <p>• Account ID + Target → clear chat 1 akun ke 1 target</p>
+            <p>• Account ID + Target 0 → clear semua pending dari akun ini</p>
+            <p>• Account 0 + Target → clear dari SEMUA akun yang pernah PM ke target ini</p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Account ID (user_id)</Label>
-              <Input type="number" placeholder="6096280434" value={manualClearUserId} onChange={(e) => setManualClearUserId(e.target.value)} disabled={manualClearing} />
+              <Label>Account ID (0 = semua akun)</Label>
+              <Input type="number" placeholder="0" value={manualClearUserId} onChange={(e) => setManualClearUserId(e.target.value)} disabled={manualClearing} />
             </div>
             <div className="space-y-2">
-              <Label>Target Chat ID (0 = semua pending)</Label>
-              <Input type="number" placeholder="0" value={manualClearTarget} onChange={(e) => setManualClearTarget(e.target.value)} disabled={manualClearing} />
+              <Label>Target Chat ID (0 = semua target)</Label>
+              <Input type="number" placeholder="898193810" value={manualClearTarget} onChange={(e) => setManualClearTarget(e.target.value)} disabled={manualClearing} />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -527,8 +535,11 @@ export default function AutoPMPage() {
           </div>
           <Button className="w-full" onClick={handleManualClearChat} disabled={manualClearing}>
             {manualClearing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
-            Clear Now
+            {manualClearing ? "Clearing..." : "Clear Now"}
           </Button>
+          {manualClearing && (
+            <p className="text-xs text-muted-foreground text-center">Proses berjalan, bisa lama kalau banyak akun...</p>
+          )}
         </CardContent>
       </Card>
 
