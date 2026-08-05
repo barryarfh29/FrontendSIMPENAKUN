@@ -25,7 +25,7 @@ export default function DashboardPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get("/api/dashboard/stats");
+      const response = await api.get("/dashboard/stats");
       setStats(response.data);
     } catch (err: any) {
       setError("Gagal memuat statistik dashboard.");

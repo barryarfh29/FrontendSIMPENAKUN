@@ -21,7 +21,7 @@ export default function AccountsPage() {
 
   const fetchAccounts = async () => {
     try {
-      const response = await api.get("/api/accounts/");
+      const response = await api.get("/accounts/");
       setAccounts(response.data);
     } catch (err: any) {
       setError("Gagal memuat daftar akun.");
@@ -33,7 +33,7 @@ export default function AccountsPage() {
   const handleBlacklist = async (userId: number, action: "add" | "remove") => {
     setActionLoading(userId);
     try {
-      await api.post(`/api/accounts/blacklist/${action}`, { user_id: userId });
+      await api.post(`/accounts/blacklist/${action}`, { user_id: userId });
       await fetchAccounts();
     } catch (err: any) {
       setError(`Gagal ${action === "add" ? "menambahkan" : "menghapus"} blacklist.`);

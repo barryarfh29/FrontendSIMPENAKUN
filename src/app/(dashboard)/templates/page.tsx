@@ -41,7 +41,7 @@ export default function TemplatesPage() {
   // Comment Templates
   const fetchTemplates = async () => {
     try {
-      const response = await api.get("/api/templates/comments");
+      const response = await api.get("/templates/comments");
       setTemplates(response.data);
     } catch (err: any) {
       setError("Gagal memuat comment templates.");
@@ -54,7 +54,7 @@ export default function TemplatesPage() {
     if (!newTemplateName.trim() || !newTemplateText.trim()) return;
     setTemplateSaving(true);
     try {
-      await api.post("/api/templates/comments", {
+      await api.post("/templates/comments", {
         name: newTemplateName,
         text: newTemplateText,
       });
@@ -71,7 +71,7 @@ export default function TemplatesPage() {
 
   const deleteTemplate = async (name: string) => {
     try {
-      await api.delete("/api/templates/comments", { data: { name } });
+      await api.delete("/templates/comments", { data: { name } });
       await fetchTemplates();
     } catch (err: any) {
       setError("Gagal menghapus template.");
@@ -81,7 +81,7 @@ export default function TemplatesPage() {
   // Saved Names
   const fetchNames = async () => {
     try {
-      const response = await api.get("/api/templates/names");
+      const response = await api.get("/templates/names");
       setNames(response.data);
       setNamesText(
         response.data.map((n: NameItem) => `${n.first},${n.last}`).join("\n")
@@ -103,7 +103,7 @@ export default function TemplatesPage() {
           const [first, last] = line.split(",").map((s) => s.trim());
           return { first: first || "", last: last || "" };
         });
-      await api.put("/api/templates/names", parsed);
+      await api.put("/templates/names", parsed);
       showSuccess("Saved names updated!");
       await fetchNames();
     } catch (err: any) {

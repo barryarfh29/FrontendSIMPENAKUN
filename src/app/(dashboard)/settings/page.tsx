@@ -28,9 +28,9 @@ export default function SettingsPage() {
   const fetchAllSettings = async () => {
     try {
       const [pmRes, commentRes, channelsRes] = await Promise.all([
-        api.get("/api/settings/auto-pm"),
-        api.get("/api/settings/auto-comment"),
-        api.get("/api/settings/reaction-channels"),
+        api.get("/settings/auto-pm"),
+        api.get("/settings/auto-comment"),
+        api.get("/settings/reaction-channels"),
       ]);
       setPmSettings(pmRes.data);
       setCommentSettings(commentRes.data);
@@ -51,7 +51,7 @@ export default function SettingsPage() {
     if (!pmSettings) return;
     setSaving("pm");
     try {
-      await api.put("/api/settings/auto-pm", pmSettings);
+      await api.put("/settings/auto-pm", pmSettings);
       showSuccess("Auto PM settings saved!");
     } catch (err: any) {
       setError("Gagal menyimpan Auto PM settings.");
@@ -64,7 +64,7 @@ export default function SettingsPage() {
     if (!commentSettings) return;
     setSaving("comment");
     try {
-      await api.put("/api/settings/auto-comment", commentSettings);
+      await api.put("/settings/auto-comment", commentSettings);
       showSuccess("Auto Comment settings saved!");
     } catch (err: any) {
       setError("Gagal menyimpan Auto Comment settings.");
@@ -77,7 +77,7 @@ export default function SettingsPage() {
     if (!reactionChannels) return;
     setSaving("channels");
     try {
-      await api.put("/api/settings/reaction-channels", reactionChannels);
+      await api.put("/settings/reaction-channels", reactionChannels);
       showSuccess("Reaction channels saved!");
     } catch (err: any) {
       setError("Gagal menyimpan reaction channels.");

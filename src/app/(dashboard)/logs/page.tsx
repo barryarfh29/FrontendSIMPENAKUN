@@ -26,7 +26,7 @@ export default function LogsPage() {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const response = await api.get("/api/logs/pm-tasks", {
+      const response = await api.get("/logs/pm-tasks", {
         params: { page, limit },
       });
       setLogs(response.data.data || response.data);
@@ -41,7 +41,7 @@ export default function LogsPage() {
   const handleClearCompleted = async () => {
     setClearing(true);
     try {
-      await api.delete("/api/logs/pm-tasks/cleared");
+      await api.delete("/logs/pm-tasks/cleared");
       await fetchLogs();
     } catch (err: any) {
       setError("Gagal menghapus completed logs.");
