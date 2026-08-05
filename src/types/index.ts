@@ -10,6 +10,8 @@ export interface DashboardStats {
 export interface AccountItem {
   user_id: number;
   phone_number: string | null;
+  first_name: string | null;
+  username: string | null;
   session_exists: boolean;
   is_blacklisted: boolean;
 }

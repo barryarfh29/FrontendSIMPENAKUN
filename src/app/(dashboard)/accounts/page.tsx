@@ -44,6 +44,7 @@ export default function AccountsPage() {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   // Detail modal
   const [selectedAccount, setSelectedAccount] = useState<AccountDetail | null>(null);
@@ -291,6 +292,29 @@ export default function AccountsPage() {
     setSessions([]);
   };
 
+  const handleSyncProfiles = async () => {
+    setSyncing(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("simpenakun_token");
+      const res = await fetch(
+        "https://api.simpenakun.site/api/accounts/sync-profiles",
+        { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) } }
+      );
+      const data = await res.json();
+      if (data.success) {
+        showSuccess(data.message || "Sync selesai!");
+        await fetchAccounts();
+      } else {
+        setError(data.message || "Sync gagal.");
+      }
+    } catch (err: any) {
+      setError("Gagal sync profiles.");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (loading) return <Loading />;
 
   if (error && accounts.length === 0) {
@@ -311,11 +335,17 @@ export default function AccountsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Accounts</h2>
-        <p className="text-muted-foreground">
-          Kelola akun Telegram yang terdaftar ({accounts.length} akun)
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Accounts</h2>
+          <p className="text-muted-foreground">
+            Kelola akun Telegram yang terdaftar ({accounts.length} akun)
+          </p>
+        </div>
+        <Button onClick={handleSyncProfiles} disabled={syncing}>
+          {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <User className="mr-2 h-4 w-4" />}
+          {syncing ? "Syncing..." : "Sync All Profiles"}
+        </Button>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -331,6 +361,7 @@ export default function AccountsPage() {
               <thead>
                 <tr className="border-b">
                   <th className="px-4 py-3 text-left font-medium">User ID</th>
+                  <th className="px-4 py-3 text-left font-medium">Name</th>
                   <th className="px-4 py-3 text-left font-medium">Phone</th>
                   <th className="px-4 py-3 text-left font-medium">Session</th>
                   <th className="px-4 py-3 text-left font-medium">Status</th>
@@ -345,6 +376,10 @@ export default function AccountsPage() {
                     onClick={() => fetchAccountDetail(account.user_id)}
                   >
                     <td className="px-4 py-3 font-mono">{account.user_id}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {account.first_name || <span className="text-muted-foreground">Not synced</span>}
+                      {account.username && <span className="text-xs text-muted-foreground ml-1">@{account.username}</span>}
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs">{account.phone_number || "-"}</td>
                     <td className="px-4 py-3">
                       <Badge variant={account.session_exists ? "default" : "secondary"}>
@@ -372,7 +407,7 @@ export default function AccountsPage() {
                   </tr>
                 ))}
                 {accounts.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Belum ada akun terdaftar.</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Belum ada akun terdaftar.</td></tr>
                 )}
               </tbody>
             </table>
