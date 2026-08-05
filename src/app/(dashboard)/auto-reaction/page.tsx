@@ -22,6 +22,19 @@ export default function AutoReactionPage() {
   const [reactionDelay, setReactionDelay] = useState(5);
   const [sendingReaction, setSendingReaction] = useState(false);
 
+  // Poll status
+  useEffect(() => {
+    const pollStatus = async () => {
+      try {
+        const res = await api.get("/actions/status");
+        setSendingReaction(res.data?.running?.reaction || false);
+      } catch { /* silent */ }
+    };
+    pollStatus();
+    const interval = setInterval(pollStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Account count for estimation
   const [accountCount, setAccountCount] = useState(0);
 

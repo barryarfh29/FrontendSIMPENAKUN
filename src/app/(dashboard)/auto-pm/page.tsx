@@ -38,6 +38,19 @@ export default function AutoPMPage() {
   const [runClearMinutes, setRunClearMinutes] = useState(60);
   const [running, setRunning] = useState(false);
 
+  // Poll status
+  useEffect(() => {
+    const pollStatus = async () => {
+      try {
+        const res = await api.get("/actions/status");
+        setRunning(res.data?.running?.pm || false);
+      } catch { /* silent */ }
+    };
+    pollStatus();
+    const interval = setInterval(pollStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Pagination
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);

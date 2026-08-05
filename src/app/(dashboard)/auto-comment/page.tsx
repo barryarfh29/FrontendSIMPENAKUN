@@ -30,6 +30,19 @@ export default function AutoCommentPage() {
   const [commentReaction, setCommentReaction] = useState(true);
   const [sending, setSending] = useState(false);
 
+  // Poll status
+  useEffect(() => {
+    const pollStatus = async () => {
+      try {
+        const res = await api.get("/actions/status");
+        setSending(res.data?.running?.comment || false);
+      } catch { /* silent */ }
+    };
+    pollStatus();
+    const interval = setInterval(pollStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Account count for estimation
   const [accountCount, setAccountCount] = useState(0);
 
