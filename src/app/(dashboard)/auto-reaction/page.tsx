@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loading } from "@/components/loading";
 import api from "@/lib/api";
-import { Loader2, Save, Plus, Trash2 } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Send } from "lucide-react";
 
 export default function AutoReactionPage() {
   const [channels, setChannels] = useState<(string | number)[]>([]);
@@ -16,21 +17,35 @@ export default function AutoReactionPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Trigger reaction
+  const [reactionLink, setReactionLink] = useState("");
+  const [reactionDelay, setReactionDelay] = useState(5);
+  const [sendingReaction, setSendingReaction] = useState(false);
+
+  // Account count for estimation
+  const [accountCount, setAccountCount] = useState(0);
+
   useEffect(() => {
-    fetchChannels();
+    fetchAll();
   }, []);
 
   const showSuccess = (msg: string) => {
     setSuccess(msg);
-    setTimeout(() => setSuccess(""), 3000);
+    setTimeout(() => setSuccess(""), 5000);
   };
 
-  const fetchChannels = async () => {
+  const fetchAll = async () => {
     try {
-      const res = await api.get("/settings/reaction-channels");
-      setChannels(res.data?.channels || []);
+      const [channelsRes, accountsRes] = await Promise.all([
+        api.get("/settings/reaction-channels"),
+        api.get("/accounts/").catch(() => ({ data: [] })),
+      ]);
+      setChannels(channelsRes.data?.channels || []);
+      const aData = accountsRes.data;
+      const accts = Array.isArray(aData) ? aData : aData?.data || aData?.accounts || [];
+      setAccountCount(accts.length);
     } catch (err: any) {
-      setError("Gagal memuat reaction channels.");
+      setError("Gagal memuat data.");
     } finally {
       setLoading(false);
     }
@@ -38,6 +53,7 @@ export default function AutoReactionPage() {
 
   const saveChannels = async () => {
     setSaving(true);
+    setError("");
     try {
       await api.put("/settings/reaction-channels", { channels });
       showSuccess("Reaction channels saved!");
@@ -60,18 +76,105 @@ export default function AutoReactionPage() {
     setChannels((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleSendReaction = async () => {
+    if (!reactionLink.trim()) {
+      setError("Link post harus diisi.");
+      return;
+    }
+    setSendingReaction(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("simpenakun_token");
+      const res = await fetch("https://api.simpenakun.site/api/actions/reaction", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          post_link: reactionLink.trim(),
+          delay: reactionDelay,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showSuccess(data.message || "Reaction selesai!");
+      } else {
+        setError(data.message || "Reaction gagal.");
+      }
+    } catch (err: any) {
+      setError("Gagal mengirim reaction.");
+    } finally {
+      setSendingReaction(false);
+    }
+  };
+
+  const reactionEstimate = Math.ceil((accountCount * reactionDelay) / 60);
+
   if (loading) return <Loading />;
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Auto Reaction</h2>
-        <p className="text-muted-foreground">Kelola channel untuk auto reaction</p>
+        <p className="text-muted-foreground">Kelola channel dan trigger reaction manual</p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {success && <p className="text-sm text-green-500">{success}</p>}
 
+      {/* Trigger Reaction */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Kirim Reaction</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Link Post</Label>
+            <Input
+              placeholder="https://t.me/channel/123"
+              value={reactionLink}
+              onChange={(e) => setReactionLink(e.target.value)}
+              disabled={sendingReaction}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Delay antar akun (detik)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={60}
+              value={reactionDelay}
+              onChange={(e) => setReactionDelay(Math.max(1, parseInt(e.target.value) || 5))}
+              disabled={sendingReaction}
+            />
+          </div>
+
+          {accountCount > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Estimasi: ~{reactionEstimate} menit ({accountCount} akun × {reactionDelay}s)
+            </p>
+          )}
+
+          <Button
+            className="w-full bg-green-600 hover:bg-green-700 text-white"
+            onClick={handleSendReaction}
+            disabled={sendingReaction}
+          >
+            {sendingReaction ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+            {sendingReaction ? "Mengirim..." : "Kirim Reaction"}
+          </Button>
+
+          {sendingReaction && (
+            <p className="text-xs text-muted-foreground text-center">
+              Proses berjalan, jangan tutup halaman.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Reaction Channels */}
       <Card>
         <CardHeader>
           <CardTitle>Reaction Channels ({channels.length})</CardTitle>
@@ -89,22 +192,23 @@ export default function AutoReactionPage() {
             </Button>
           </div>
 
-          <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
             {channels.map((id, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between rounded-md border px-3 py-2"
+                className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-mono"
               >
-                <span className="font-mono text-sm">{id}</span>
-                <Button variant="ghost" size="icon" onClick={() => removeChannel(index)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                {id}
+                <button
+                  onClick={() => removeChannel(index)}
+                  className="ml-1 text-destructive hover:text-destructive/80"
+                >
+                  ×
+                </button>
               </div>
             ))}
             {channels.length === 0 && (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                Belum ada channel yang ditambahkan.
-              </p>
+              <p className="text-sm text-muted-foreground">Belum ada channel.</p>
             )}
           </div>
 
