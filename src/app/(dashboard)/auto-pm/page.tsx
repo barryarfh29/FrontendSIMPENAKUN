@@ -10,8 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loading } from "@/components/loading";
 import api from "@/lib/api";
 import type { AutoPMSettings, PMTaskLogItem } from "@/types";
-import Link from "next/link";
-import { Loader2, Save, Trash2, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
+import { Loader2, Save, Trash2, ChevronLeft, ChevronRight, Plus, Play } from "lucide-react";
 
 export default function AutoPMPage() {
   const [settings, setSettings] = useState<AutoPMSettings | null>(null);
@@ -20,7 +19,18 @@ export default function AutoPMPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [channelCount, setChannelCount] = useState(0);
+
+  // PM Channels
+  const [pmChannels, setPmChannels] = useState<(string | number)[]>([]);
+  const [newPmChannel, setNewPmChannel] = useState("");
+  const [savingChannels, setSavingChannels] = useState(false);
+
+  // Run Now
+  const [runMaxAccounts, setRunMaxAccounts] = useState(5);
+  const [runDelayMin, setRunDelayMin] = useState(30);
+  const [runDelayMax, setRunDelayMax] = useState(90);
+  const [runClearHours, setRunClearHours] = useState(24);
+  const [running, setRunning] = useState(false);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -30,8 +40,7 @@ export default function AutoPMPage() {
   const limit = 50;
 
   useEffect(() => {
-    fetchSettings();
-    fetchChannelCount();
+    fetchAll();
   }, []);
 
   useEffect(() => {
@@ -41,27 +50,21 @@ export default function AutoPMPage() {
 
   const showSuccess = (msg: string) => {
     setSuccess(msg);
-    setTimeout(() => setSuccess(""), 3000);
+    setTimeout(() => setSuccess(""), 5000);
   };
 
-  const fetchSettings = async () => {
+  const fetchAll = async () => {
     try {
-      const res = await api.get("/settings/auto-pm");
-      setSettings(res.data);
+      const [settingsRes, channelsRes] = await Promise.all([
+        api.get("/settings/auto-pm"),
+        api.get("/settings/pm-channels").catch(() => ({ data: { channels: [] } })),
+      ]);
+      setSettings(settingsRes.data);
+      setPmChannels(channelsRes.data?.channels || []);
     } catch (err: any) {
-      setError("Gagal memuat Auto PM settings.");
+      setError("Gagal memuat settings.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchChannelCount = async () => {
-    try {
-      const res = await api.get("/settings/reaction-channels");
-      const channels = res.data?.channels || [];
-      setChannelCount(channels.length);
-    } catch {
-      // silent
     }
   };
 
@@ -81,7 +84,7 @@ export default function AutoPMPage() {
         setTotal(0);
       }
     } catch (err: any) {
-      // silently fail for logs
+      // silent
     } finally {
       setLogsLoading(false);
     }
@@ -90,6 +93,7 @@ export default function AutoPMPage() {
   const saveSettings = async () => {
     if (!settings) return;
     setSaving(true);
+    setError("");
     try {
       await api.put("/settings/auto-pm", settings);
       showSuccess("Auto PM settings saved!");
@@ -97,6 +101,66 @@ export default function AutoPMPage() {
       setError("Gagal menyimpan settings.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // PM Channels
+  const savePmChannels = async () => {
+    setSavingChannels(true);
+    setError("");
+    try {
+      await api.put("/settings/pm-channels", { channels: pmChannels });
+      showSuccess("PM channels saved!");
+    } catch (err: any) {
+      setError("Gagal menyimpan PM channels.");
+    } finally {
+      setSavingChannels(false);
+    }
+  };
+
+  const addPmChannel = () => {
+    const val = newPmChannel.trim();
+    if (!val) return;
+    const numVal = Number(val);
+    setPmChannels((prev) => [...prev, isNaN(numVal) ? val : numVal]);
+    setNewPmChannel("");
+  };
+
+  const removePmChannel = (index: number) => {
+    setPmChannels((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Run Now
+  const handleRunNow = async () => {
+    setRunning(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("simpenakun_token");
+      const res = await fetch("https://api.simpenakun.site/api/actions/trigger-pm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          channel_id: 0,
+          max_accounts: runMaxAccounts,
+          clear_hours: runClearHours,
+          delay_min: runDelayMin,
+          delay_max: runDelayMax,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showSuccess(data.message || "PM trigger selesai!");
+        await fetchLogs();
+      } else {
+        setError(data.message || "Trigger PM gagal.");
+      }
+    } catch (err: any) {
+      setError("Gagal trigger PM.");
+    } finally {
+      setRunning(false);
     }
   };
 
@@ -131,31 +195,88 @@ export default function AutoPMPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Auto PM</h2>
-        <p className="text-muted-foreground">Konfigurasi dan log auto PM</p>
+        <p className="text-muted-foreground">Konfigurasi, trigger manual, dan log PM</p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {success && <p className="text-sm text-green-500">{success}</p>}
 
-      {/* Channel Info */}
-      <div className="rounded-md border bg-muted/50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium">Target diambil otomatis dari post di Reaction Channels</p>
+      {/* PM Channels */}
+      <Card>
+        <CardHeader>
+          <CardTitle>PM Channels ({pmChannels.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Monitoring {channelCount} channel{channelCount !== 1 ? "s" : ""} untuk target PM
+            Channel untuk scan target CS (terpisah dari Auto Reaction)
           </p>
-        </div>
-        <Link href="/auto-reaction">
-          <Button variant="outline" size="sm">
-            Manage Channels <ArrowRight className="ml-1 h-3 w-3" />
+          <div className="flex gap-2">
+            <Input
+              placeholder="Channel ID (contoh: -100347158631)"
+              value={newPmChannel}
+              onChange={(e) => setNewPmChannel(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addPmChannel()}
+            />
+            <Button onClick={addPmChannel} size="icon">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {pmChannels.map((id, index) => (
+              <div key={index} className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-mono">
+                {id}
+                <button onClick={() => removePmChannel(index)} className="ml-1 text-destructive hover:text-destructive/80">×</button>
+              </div>
+            ))}
+            {pmChannels.length === 0 && (
+              <p className="text-sm text-muted-foreground">Belum ada channel.</p>
+            )}
+          </div>
+          <Button onClick={savePmChannels} disabled={savingChannels} size="sm">
+            {savingChannels ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save Channels
           </Button>
-        </Link>
-      </div>
+        </CardContent>
+      </Card>
+
+      {/* Run Now */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Trigger PM Manual</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Max Accounts</Label>
+              <Input type="number" min={1} value={runMaxAccounts} onChange={(e) => setRunMaxAccounts(parseInt(e.target.value) || 5)} disabled={running} />
+            </div>
+            <div className="space-y-2">
+              <Label>Clear Hours</Label>
+              <Input type="number" min={1} value={runClearHours} onChange={(e) => setRunClearHours(parseInt(e.target.value) || 24)} disabled={running} />
+            </div>
+            <div className="space-y-2">
+              <Label>Delay Min (detik)</Label>
+              <Input type="number" min={5} value={runDelayMin} onChange={(e) => setRunDelayMin(parseInt(e.target.value) || 30)} disabled={running} />
+            </div>
+            <div className="space-y-2">
+              <Label>Delay Max (detik)</Label>
+              <Input type="number" min={5} value={runDelayMax} onChange={(e) => setRunDelayMax(parseInt(e.target.value) || 90)} disabled={running} />
+            </div>
+          </div>
+          <Button className="w-full bg-green-600 hover:bg-green-700 text-white" onClick={handleRunNow} disabled={running}>
+            {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+            {running ? "Running..." : "Run Now"}
+          </Button>
+          {running && (
+            <p className="text-xs text-muted-foreground text-center">Proses berjalan, jangan tutup halaman...</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Settings */}
       <Card>
         <CardHeader>
-          <CardTitle>Auto PM Settings</CardTitle>
+          <CardTitle>Auto PM Settings (Scheduler)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
