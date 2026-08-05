@@ -61,7 +61,7 @@ export default function AccountsPage() {
       // Use fetch directly to handle redirects manually
       const token = localStorage.getItem("simpenakun_token");
       const res = await fetch(
-        `https://api.simpenakun.site/api/accounts/${userId}/`,
+        `https://api.simpenakun.site/api/accounts/${userId}`,
         {
           method: "GET",
           headers: {
