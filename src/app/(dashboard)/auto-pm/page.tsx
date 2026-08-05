@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loading } from "@/components/loading";
 import api from "@/lib/api";
 import type { AutoPMSettings, PMTaskLogItem } from "@/types";
-import { Loader2, Save, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Save, Trash2, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 
 export default function AutoPMPage() {
   const [settings, setSettings] = useState<AutoPMSettings | null>(null);
@@ -19,6 +20,7 @@ export default function AutoPMPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [channelCount, setChannelCount] = useState(0);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -29,6 +31,7 @@ export default function AutoPMPage() {
 
   useEffect(() => {
     fetchSettings();
+    fetchChannelCount();
   }, []);
 
   useEffect(() => {
@@ -49,6 +52,16 @@ export default function AutoPMPage() {
       setError("Gagal memuat Auto PM settings.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchChannelCount = async () => {
+    try {
+      const res = await api.get("/settings/reaction-channels");
+      const channels = res.data?.channels || [];
+      setChannelCount(channels.length);
+    } catch {
+      // silent
     }
   };
 
@@ -123,6 +136,21 @@ export default function AutoPMPage() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {success && <p className="text-sm text-green-500">{success}</p>}
+
+      {/* Channel Info */}
+      <div className="rounded-md border bg-muted/50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">Target diambil otomatis dari post di Reaction Channels</p>
+          <p className="text-xs text-muted-foreground">
+            Monitoring {channelCount} channel{channelCount !== 1 ? "s" : ""} untuk target PM
+          </p>
+        </div>
+        <Link href="/auto-reaction">
+          <Button variant="outline" size="sm">
+            Manage Channels <ArrowRight className="ml-1 h-3 w-3" />
+          </Button>
+        </Link>
+      </div>
 
       {/* Settings */}
       <Card>
