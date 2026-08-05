@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loading } from "@/components/loading";
 import api from "@/lib/api";
-import { Loader2, Save, Plus, Trash2, Send } from "lucide-react";
+import { Loader2, Save, Plus, Trash2, Send, Square } from "lucide-react";
 
 export default function AutoReactionPage() {
   const [channels, setChannels] = useState<(string | number)[]>([]);
@@ -109,6 +109,19 @@ export default function AutoReactionPage() {
     }
   };
 
+  const handleStopReaction = async () => {
+    try {
+      const token = localStorage.getItem("simpenakun_token");
+      await fetch("https://api.simpenakun.site/api/actions/stop/reaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      showSuccess("Stop signal sent. Menunggu proses berhenti...");
+    } catch {
+      setError("Gagal mengirim stop signal.");
+    }
+  };
+
   const reactionEstimate = Math.ceil((accountCount * reactionDelay) / 60);
 
   if (loading) return <Loading />;
@@ -157,14 +170,20 @@ export default function AutoReactionPage() {
             </p>
           )}
 
-          <Button
-            className="w-full bg-green-600 hover:bg-green-700 text-white"
-            onClick={handleSendReaction}
-            disabled={sendingReaction}
-          >
-            {sendingReaction ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-            {sendingReaction ? "Mengirim..." : "Kirim Reaction"}
-          </Button>
+          {!sendingReaction ? (
+            <Button
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleSendReaction}
+            >
+              <Send className="mr-2 h-4 w-4" />
+              Kirim Reaction
+            </Button>
+          ) : (
+            <Button variant="destructive" className="w-full" onClick={handleStopReaction}>
+              <Square className="mr-2 h-4 w-4" />
+              Stop
+            </Button>
+          )}
 
           {sendingReaction && (
             <p className="text-xs text-muted-foreground text-center">

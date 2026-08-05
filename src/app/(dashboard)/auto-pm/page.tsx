@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loading } from "@/components/loading";
 import api from "@/lib/api";
 import type { AutoPMSettings, PMTaskLogItem } from "@/types";
-import { Loader2, Save, Trash2, ChevronLeft, ChevronRight, Plus, Play } from "lucide-react";
+import { Loader2, Save, Trash2, ChevronLeft, ChevronRight, Plus, Play, Square } from "lucide-react";
 
 export default function AutoPMPage() {
   const [settings, setSettings] = useState<AutoPMSettings | null>(null);
@@ -164,6 +164,19 @@ export default function AutoPMPage() {
     }
   };
 
+  const handleStopPm = async () => {
+    try {
+      const token = localStorage.getItem("simpenakun_token");
+      await fetch("https://api.simpenakun.site/api/actions/stop/pm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      showSuccess("Stop signal sent. Menunggu proses berhenti...");
+    } catch {
+      setError("Gagal mengirim stop signal.");
+    }
+  };
+
   const handleClearCompleted = async () => {
     setClearing(true);
     try {
@@ -263,10 +276,17 @@ export default function AutoPMPage() {
               <Input type="number" min={5} value={runDelayMax} onChange={(e) => setRunDelayMax(parseInt(e.target.value) || 90)} disabled={running} />
             </div>
           </div>
-          <Button className="w-full bg-green-600 hover:bg-green-700 text-white" onClick={handleRunNow} disabled={running}>
-            {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-            {running ? "Running..." : "Run Now"}
-          </Button>
+          {!running ? (
+            <Button className="w-full bg-green-600 hover:bg-green-700 text-white" onClick={handleRunNow}>
+              <Play className="mr-2 h-4 w-4" />
+              Run Now
+            </Button>
+          ) : (
+            <Button variant="destructive" className="w-full" onClick={handleStopPm}>
+              <Square className="mr-2 h-4 w-4" />
+              Stop
+            </Button>
+          )}
           {running && (
             <p className="text-xs text-muted-foreground text-center">Proses berjalan, jangan tutup halaman...</p>
           )}

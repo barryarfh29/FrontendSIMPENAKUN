@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loading } from "@/components/loading";
 import api from "@/lib/api";
 import type { AutoCommentSettings, TemplateItem } from "@/types";
-import { Loader2, Save, Send } from "lucide-react";
+import { Loader2, Save, Send, Square } from "lucide-react";
 
 export default function AutoCommentPage() {
   const [settings, setSettings] = useState<AutoCommentSettings | null>(null);
@@ -110,6 +110,19 @@ export default function AutoCommentPage() {
       setError("Gagal mengirim comment.");
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleStopComment = async () => {
+    try {
+      const token = localStorage.getItem("simpenakun_token");
+      await fetch("https://api.simpenakun.site/api/actions/stop/comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      showSuccess("Stop signal sent. Menunggu proses berhenti...");
+    } catch {
+      setError("Gagal mengirim stop signal.");
     }
   };
 
@@ -269,14 +282,20 @@ export default function AutoCommentPage() {
             </p>
           )}
 
-          <Button
-            className="w-full bg-green-600 hover:bg-green-700 text-white"
-            onClick={handleSendComment}
-            disabled={sending}
-          >
-            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-            {sending ? "Mengirim..." : "Kirim Comment"}
-          </Button>
+          {!sending ? (
+            <Button
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleSendComment}
+            >
+              <Send className="mr-2 h-4 w-4" />
+              Kirim Comment
+            </Button>
+          ) : (
+            <Button variant="destructive" className="w-full" onClick={handleStopComment}>
+              <Square className="mr-2 h-4 w-4" />
+              Stop
+            </Button>
+          )}
 
           {sending && (
             <p className="text-xs text-muted-foreground text-center">
