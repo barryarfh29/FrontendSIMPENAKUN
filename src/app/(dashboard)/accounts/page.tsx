@@ -17,6 +17,9 @@ import {
   Calendar,
   Key,
   Trash2,
+  LogOut,
+  Copy,
+  Check,
 } from "lucide-react";
 
 export default function AccountsPage() {
@@ -30,13 +33,26 @@ export default function AccountsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
-  // Delete confirmation
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  // Confirmations
+  const [confirmAction, setConfirmAction] = useState<"delete" | "logout" | null>(null);
+  const [actionProcessing, setActionProcessing] = useState(false);
+
+  // OTP
+  const [otpCode, setOtpCode] = useState<string | null>(null);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpCopied, setOtpCopied] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
   }, []);
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("simpenakun_token");
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
 
   const fetchAccounts = async () => {
     try {
@@ -62,22 +78,14 @@ export default function AccountsPage() {
     setDetailLoading(true);
     setShowModal(true);
     setError("");
+    setOtpCode(null);
+    setConfirmAction(null);
     try {
-      const token = localStorage.getItem("simpenakun_token");
       const res = await fetch(
         `https://api.simpenakun.site/api/accounts/${userId}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          redirect: "follow",
-        }
+        { method: "GET", headers: getAuthHeaders(), redirect: "follow" }
       );
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setSelectedAccount(data);
     } catch (err: any) {
@@ -106,38 +114,80 @@ export default function AccountsPage() {
     }
   };
 
+  const handleGetOtp = async () => {
+    if (!selectedAccount) return;
+    setOtpLoading(true);
+    setOtpCode(null);
+    try {
+      const res = await fetch(
+        `https://api.simpenakun.site/api/accounts/${selectedAccount.user_id}/get-otp`,
+        { method: "POST", headers: getAuthHeaders() }
+      );
+      const data = await res.json();
+      if (data.success) {
+        setOtpCode(data.message);
+      } else {
+        setOtpCode(null);
+        setError(data.message || "Tidak ada OTP code ditemukan.");
+      }
+    } catch (err: any) {
+      setError("Gagal mengambil OTP code.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (!selectedAccount) return;
+    setActionProcessing(true);
+    try {
+      const res = await fetch(
+        `https://api.simpenakun.site/api/accounts/${selectedAccount.user_id}/logout`,
+        { method: "POST", headers: getAuthHeaders() }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setConfirmAction(null);
+      closeModal();
+      await fetchAccounts();
+    } catch (err: any) {
+      setError("Gagal logout akun.");
+    } finally {
+      setActionProcessing(false);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     if (!selectedAccount) return;
-    setDeleting(true);
+    setActionProcessing(true);
     try {
-      const token = localStorage.getItem("simpenakun_token");
       const res = await fetch(
         `https://api.simpenakun.site/api/accounts/${selectedAccount.user_id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }
+        { method: "DELETE", headers: getAuthHeaders() }
       );
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      setShowDeleteConfirm(false);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setConfirmAction(null);
       closeModal();
       await fetchAccounts();
     } catch (err: any) {
       setError("Gagal menghapus akun.");
     } finally {
-      setDeleting(false);
+      setActionProcessing(false);
+    }
+  };
+
+  const copyOtp = () => {
+    if (otpCode) {
+      navigator.clipboard.writeText(otpCode);
+      setOtpCopied(true);
+      setTimeout(() => setOtpCopied(false), 2000);
     }
   };
 
   const closeModal = () => {
     setShowModal(false);
     setSelectedAccount(null);
-    setShowDeleteConfirm(false);
+    setConfirmAction(null);
+    setOtpCode(null);
   };
 
   if (loading) return <Loading />;
@@ -189,16 +239,12 @@ export default function AccountsPage() {
                       {account.phone_number || "-"}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge
-                        variant={account.session_exists ? "default" : "secondary"}
-                      >
+                      <Badge variant={account.session_exists ? "default" : "secondary"}>
                         {account.session_exists ? "Active" : "Inactive"}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge
-                        variant={account.is_blacklisted ? "destructive" : "outline"}
-                      >
+                      <Badge variant={account.is_blacklisted ? "destructive" : "outline"}>
                         {account.is_blacklisted ? "Blacklisted" : "Normal"}
                       </Badge>
                     </td>
@@ -207,34 +253,20 @@ export default function AccountsPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleBlacklist(account.user_id, "remove");
-                          }}
+                          onClick={(e) => { e.stopPropagation(); handleBlacklist(account.user_id, "remove"); }}
                           disabled={actionLoading === account.user_id}
                         >
-                          {actionLoading === account.user_id ? (
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                          ) : (
-                            <ShieldCheck className="mr-1 h-3 w-3" />
-                          )}
+                          {actionLoading === account.user_id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="mr-1 h-3 w-3" />}
                           Unblock
                         </Button>
                       ) : (
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleBlacklist(account.user_id, "add");
-                          }}
+                          onClick={(e) => { e.stopPropagation(); handleBlacklist(account.user_id, "add"); }}
                           disabled={actionLoading === account.user_id}
                         >
-                          {actionLoading === account.user_id ? (
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                          ) : (
-                            <ShieldBan className="mr-1 h-3 w-3" />
-                          )}
+                          {actionLoading === account.user_id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <ShieldBan className="mr-1 h-3 w-3" />}
                           Blacklist
                         </Button>
                       )}
@@ -259,13 +291,7 @@ export default function AccountsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black/50" onClick={closeModal} />
           <div className="relative z-50 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg border bg-card p-6 shadow-lg mx-4">
-            {/* Close button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-4 top-4"
-              onClick={closeModal}
-            >
+            <Button variant="ghost" size="icon" className="absolute right-4 top-4" onClick={closeModal}>
               <X className="h-4 w-4" />
             </Button>
 
@@ -275,7 +301,7 @@ export default function AccountsPage() {
               <Loading />
             ) : selectedAccount ? (
               <div className="space-y-4">
-                {/* User ID */}
+                {/* Info fields */}
                 <div className="flex items-center gap-3">
                   <User className="h-4 w-4 text-muted-foreground" />
                   <div>
@@ -284,7 +310,6 @@ export default function AccountsPage() {
                   </div>
                 </div>
 
-                {/* Phone Number */}
                 <div className="flex items-center gap-3">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <div>
@@ -293,7 +318,6 @@ export default function AccountsPage() {
                   </div>
                 </div>
 
-                {/* Old Phone Number */}
                 {selectedAccount.old_phone_number && (
                   <div className="flex items-center gap-3">
                     <Phone className="h-4 w-4 text-muted-foreground" />
@@ -304,7 +328,6 @@ export default function AccountsPage() {
                   </div>
                 )}
 
-                {/* Password (2FA) */}
                 <div className="flex items-center gap-3">
                   <Key className="h-4 w-4 text-muted-foreground" />
                   <div>
@@ -313,15 +336,12 @@ export default function AccountsPage() {
                   </div>
                 </div>
 
-                {/* Date */}
                 <div className="flex items-center gap-3">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">Date</p>
                     <p className="text-sm">
-                      {selectedAccount.date
-                        ? new Date(selectedAccount.date).toLocaleString("id-ID")
-                        : "-"}
+                      {selectedAccount.date ? new Date(selectedAccount.date).toLocaleString("id-ID") : "-"}
                     </p>
                   </div>
                 </div>
@@ -339,9 +359,31 @@ export default function AccountsPage() {
                   )}
                 </div>
 
+                {/* OTP Display */}
+                {otpCode && (
+                  <div className="rounded-md border border-green-500/50 bg-green-500/10 p-4 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">OTP Code</p>
+                    <p className="text-3xl font-bold font-mono tracking-widest">{otpCode}</p>
+                    <Button variant="ghost" size="sm" className="mt-2" onClick={copyOtp}>
+                      {otpCopied ? <Check className="mr-1 h-3 w-3" /> : <Copy className="mr-1 h-3 w-3" />}
+                      {otpCopied ? "Copied!" : "Copy"}
+                    </Button>
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div className="space-y-2 pt-4 border-t">
-                  {/* Blacklist action */}
+                  {/* Get OTP */}
+                  <Button
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    onClick={handleGetOtp}
+                    disabled={otpLoading}
+                  >
+                    {otpLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
+                    Get OTP Code
+                  </Button>
+
+                  {/* Blacklist toggle */}
                   {selectedAccount.is_blacklisted ? (
                     <Button
                       variant="outline"
@@ -349,11 +391,7 @@ export default function AccountsPage() {
                       onClick={() => handleBlacklist(selectedAccount.user_id, "remove")}
                       disabled={actionLoading === selectedAccount.user_id}
                     >
-                      {actionLoading === selectedAccount.user_id ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <ShieldCheck className="mr-2 h-4 w-4" />
-                      )}
+                      {actionLoading === selectedAccount.user_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
                       Remove from Blacklist
                     </Button>
                   ) : (
@@ -363,55 +401,64 @@ export default function AccountsPage() {
                       onClick={() => handleBlacklist(selectedAccount.user_id, "add")}
                       disabled={actionLoading === selectedAccount.user_id}
                     >
-                      {actionLoading === selectedAccount.user_id ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <ShieldBan className="mr-2 h-4 w-4" />
-                      )}
+                      {actionLoading === selectedAccount.user_id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldBan className="mr-2 h-4 w-4" />}
                       Add to Blacklist
                     </Button>
                   )}
 
-                  {/* Delete / Clear Session */}
-                  {!showDeleteConfirm ? (
-                    <Button
-                      variant="destructive"
-                      className="w-full"
-                      onClick={() => setShowDeleteConfirm(true)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Clear Sesi
-                    </Button>
-                  ) : (
+                  {/* Confirmation area */}
+                  {confirmAction && (
                     <div className="rounded-md border border-destructive p-3 space-y-3">
                       <p className="text-sm text-destructive font-medium">
-                        Yakin hapus akun ini dari database?
+                        {confirmAction === "logout"
+                          ? "Yakin logout akun ini dari Telegram dan hapus dari database?"
+                          : "Yakin hapus akun ini dari database (clear sesi)?"}
                       </p>
                       <div className="flex gap-2">
                         <Button
                           variant="destructive"
                           size="sm"
                           className="flex-1"
-                          onClick={handleDeleteAccount}
-                          disabled={deleting}
+                          onClick={confirmAction === "logout" ? handleLogout : handleDeleteAccount}
+                          disabled={actionProcessing}
                         >
-                          {deleting ? (
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                          ) : (
-                            <Trash2 className="mr-1 h-3 w-3" />
-                          )}
-                          Ya, Hapus
+                          {actionProcessing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Trash2 className="mr-1 h-3 w-3" />}
+                          Ya, Lanjutkan
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           className="flex-1"
-                          onClick={() => setShowDeleteConfirm(false)}
+                          onClick={() => setConfirmAction(null)}
                         >
                           Batal
                         </Button>
                       </div>
                     </div>
+                  )}
+
+                  {/* Logout button */}
+                  {!confirmAction && (
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={() => setConfirmAction("logout")}
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout Akun
+                    </Button>
+                  )}
+
+                  {/* Clear Sesi button */}
+                  {!confirmAction && (
+                    <Button
+                      variant="outline"
+                      className="w-full border-orange-500 text-orange-500 hover:bg-orange-500/10"
+                      onClick={() => setConfirmAction("delete")}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Clear Sesi
+                    </Button>
                   )}
                 </div>
               </div>
