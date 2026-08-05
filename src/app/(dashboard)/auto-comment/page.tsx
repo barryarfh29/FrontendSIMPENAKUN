@@ -219,6 +219,28 @@ export default function AutoCommentPage() {
             </div>
           )}
 
+          {/* Template Preview */}
+          {!useCustomText && templates.length > 0 && (
+            <div className="rounded-md border bg-muted/50 p-3">
+              <p className="text-xs text-muted-foreground mb-2">
+                {templateIndex === -1
+                  ? `${templates.length} template siap dikirim (random per akun):`
+                  : "Template yang dipilih:"}
+              </p>
+              {templateIndex === -1 ? (
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {templates.map((t, i) => (
+                    <p key={i} className="text-xs font-mono truncate">
+                      {i + 1}. {t.text}
+                    </p>
+                  ))}
+                </div>
+              ) : templates[templateIndex] ? (
+                <p className="text-sm font-mono">{templates[templateIndex].text}</p>
+              ) : null}
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Delay antar akun (detik)</Label>
