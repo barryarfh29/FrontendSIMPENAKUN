@@ -1,10 +1,9 @@
 import axios from "axios";
 import { getToken, removeToken } from "./auth";
 
-// Use our own Next.js API proxy to avoid CORS issues
-// Browser → /api/proxy/auth/login → server → https://api.simpenakun.site/api/auth/login
+// Call backend directly — CORS is handled by backend
 const api = axios.create({
-  baseURL: "/api/proxy",
+  baseURL: "https://api.simpenakun.site/api",
   headers: {
     "Content-Type": "application/json",
   },
@@ -14,8 +13,6 @@ api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-    // Also send via custom header as backup (in case Authorization is stripped)
-    config.headers["X-Auth-Token"] = token;
   }
   return config;
 });
@@ -24,7 +21,6 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Don't redirect on login attempt failure
       const isLoginRequest = error.config?.url?.includes("auth/login");
       if (!isLoginRequest) {
         removeToken();
