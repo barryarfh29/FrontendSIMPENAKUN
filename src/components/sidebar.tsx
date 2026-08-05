@@ -9,6 +9,8 @@ import {
   FileText,
   MessageSquare,
   X,
+  Send,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -16,9 +18,11 @@ import { Button } from "./ui/button";
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/accounts", label: "Accounts", icon: Users },
+  { href: "/auto-pm", label: "Auto PM", icon: Send },
+  { href: "/auto-comment", label: "Auto Comment", icon: MessageSquare },
+  { href: "/auto-reaction", label: "Auto Reaction", icon: Eye },
+  { href: "/templates", label: "Templates", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/logs", label: "PM Logs", icon: FileText },
-  { href: "/templates", label: "Templates", icon: MessageSquare },
 ];
 
 interface SidebarProps {
