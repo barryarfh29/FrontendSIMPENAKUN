@@ -58,17 +58,27 @@ export default function AccountsPage() {
     setShowModal(true);
     setError("");
     try {
-      const response = await api.get(`/accounts/${userId}/`);
-      setSelectedAccount(response.data);
-    } catch (err: any) {
-      // Try without trailing slash as fallback
-      try {
-        const response = await api.get(`/accounts/${userId}`);
-        setSelectedAccount(response.data);
-      } catch (err2: any) {
-        setError("Gagal memuat detail akun.");
-        setShowModal(false);
+      // Use fetch directly to handle redirects manually
+      const token = localStorage.getItem("simpenakun_token");
+      const res = await fetch(
+        `https://api.simpenakun.site/api/accounts/${userId}/`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          redirect: "follow",
+        }
+      );
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
       }
+      const data = await res.json();
+      setSelectedAccount(data);
+    } catch (err: any) {
+      setError("Gagal memuat detail akun.");
+      setShowModal(false);
     } finally {
       setDetailLoading(false);
     }
