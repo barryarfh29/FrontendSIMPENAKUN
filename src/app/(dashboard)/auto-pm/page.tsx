@@ -35,7 +35,7 @@ export default function AutoPMPage() {
   const [runMaxAccounts, setRunMaxAccounts] = useState(5);
   const [runDelayMin, setRunDelayMin] = useState(30);
   const [runDelayMax, setRunDelayMax] = useState(90);
-  const [runClearHours, setRunClearHours] = useState(24);
+  const [runClearMinutes, setRunClearMinutes] = useState(60);
   const [running, setRunning] = useState(false);
 
   // Pagination
@@ -191,7 +191,7 @@ export default function AutoPMPage() {
         body: JSON.stringify({
           channel_id: 0,
           max_accounts: runMaxAccounts,
-          clear_hours: runClearHours,
+          clear_hours: runClearMinutes / 60,
           delay_min: runDelayMin,
           delay_max: runDelayMax,
         }),
@@ -363,8 +363,8 @@ export default function AutoPMPage() {
               <Input type="number" min={1} value={runMaxAccounts} onChange={(e) => setRunMaxAccounts(parseInt(e.target.value) || 5)} disabled={running} />
             </div>
             <div className="space-y-2">
-              <Label>Clear Hours</Label>
-              <Input type="number" min={1} value={runClearHours} onChange={(e) => setRunClearHours(parseInt(e.target.value) || 24)} disabled={running} />
+              <Label>Clear Chat Setelah (menit)</Label>
+              <Input type="number" min={1} step={1} value={runClearMinutes} onChange={(e) => setRunClearMinutes(parseInt(e.target.value) || 60)} disabled={running} />
             </div>
             <div className="space-y-2">
               <Label>Delay Min (detik)</Label>
