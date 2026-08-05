@@ -15,6 +15,9 @@ interface ReactChannelProgress {
   completed: number;
   remaining: number;
   started_at: string | null;
+  current_channel: number | null;
+  current_channel_name: string | null;
+  current_msg: number | null;
 }
 
 export default function AutoReactionPage() {
@@ -160,7 +163,7 @@ export default function AutoReactionPage() {
   // React channel (new task)
   const handleReactChannel = async (channelId: number | string | 0) => {
     // Immediately update UI
-    setProgress({ status: "RUNNING", total: 0, completed: 0, remaining: 0, started_at: new Date().toISOString() });
+    setProgress({ status: "RUNNING", total: 0, completed: 0, remaining: 0, started_at: new Date().toISOString(), current_channel: null, current_channel_name: null, current_msg: null });
     if (channelId !== 0) setReactingChannel(channelId);
     setError("");
     try {
@@ -290,6 +293,13 @@ export default function AutoReactionPage() {
                 {progress!.completed}/{progress!.total} posts ({progress!.remaining} remaining)
               </span>
             </div>
+            {/* Current channel/post info */}
+            {isRunning && (progress!.current_channel || progress!.current_msg) && (
+              <p className="text-xs text-muted-foreground">
+                Channel: <span className="font-medium">{progress!.current_channel_name || progress!.current_channel}</span>
+                {progress!.current_msg ? <> | Post #{progress!.current_msg}</> : null}
+              </p>
+            )}
             {/* Bar */}
             <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
               <div
