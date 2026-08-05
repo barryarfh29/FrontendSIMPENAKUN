@@ -16,6 +16,7 @@ import {
   User,
   Calendar,
   Key,
+  Trash2,
 } from "lucide-react";
 
 export default function AccountsPage() {
@@ -28,6 +29,10 @@ export default function AccountsPage() {
   const [selectedAccount, setSelectedAccount] = useState<AccountDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  // Delete confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchAccounts();
@@ -58,7 +63,6 @@ export default function AccountsPage() {
     setShowModal(true);
     setError("");
     try {
-      // Use fetch directly to handle redirects manually
       const token = localStorage.getItem("simpenakun_token");
       const res = await fetch(
         `https://api.simpenakun.site/api/accounts/${userId}`,
@@ -87,9 +91,8 @@ export default function AccountsPage() {
   const handleBlacklist = async (userId: number, action: "add" | "remove") => {
     setActionLoading(userId);
     try {
-      await api.post(`/accounts/blacklist/${action}`, { user_id: userId });
+      await api.post(`/accounts/blacklist/${action}`, { ids: [userId] });
       await fetchAccounts();
-      // Update modal if open
       if (selectedAccount && selectedAccount.user_id === userId) {
         setSelectedAccount({
           ...selectedAccount,
@@ -103,9 +106,38 @@ export default function AccountsPage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!selectedAccount) return;
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem("simpenakun_token");
+      const res = await fetch(
+        `https://api.simpenakun.site/api/accounts/${selectedAccount.user_id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      setShowDeleteConfirm(false);
+      closeModal();
+      await fetchAccounts();
+    } catch (err: any) {
+      setError("Gagal menghapus akun.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const closeModal = () => {
     setShowModal(false);
     setSelectedAccount(null);
+    setShowDeleteConfirm(false);
   };
 
   if (loading) return <Loading />;
@@ -226,7 +258,7 @@ export default function AccountsPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black/50" onClick={closeModal} />
-          <div className="relative z-50 w-full max-w-md rounded-lg border bg-card p-6 shadow-lg mx-4">
+          <div className="relative z-50 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg border bg-card p-6 shadow-lg mx-4">
             {/* Close button */}
             <Button
               variant="ghost"
@@ -307,8 +339,9 @@ export default function AccountsPage() {
                   )}
                 </div>
 
-                {/* Blacklist action */}
-                <div className="pt-4 border-t">
+                {/* Actions */}
+                <div className="space-y-2 pt-4 border-t">
+                  {/* Blacklist action */}
                   {selectedAccount.is_blacklisted ? (
                     <Button
                       variant="outline"
@@ -325,7 +358,7 @@ export default function AccountsPage() {
                     </Button>
                   ) : (
                     <Button
-                      variant="destructive"
+                      variant="secondary"
                       className="w-full"
                       onClick={() => handleBlacklist(selectedAccount.user_id, "add")}
                       disabled={actionLoading === selectedAccount.user_id}
@@ -337,6 +370,48 @@ export default function AccountsPage() {
                       )}
                       Add to Blacklist
                     </Button>
+                  )}
+
+                  {/* Delete / Clear Session */}
+                  {!showDeleteConfirm ? (
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Clear Sesi
+                    </Button>
+                  ) : (
+                    <div className="rounded-md border border-destructive p-3 space-y-3">
+                      <p className="text-sm text-destructive font-medium">
+                        Yakin hapus akun ini dari database?
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="flex-1"
+                          onClick={handleDeleteAccount}
+                          disabled={deleting}
+                        >
+                          {deleting ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="mr-1 h-3 w-3" />
+                          )}
+                          Ya, Hapus
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setShowDeleteConfirm(false)}
+                        >
+                          Batal
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
