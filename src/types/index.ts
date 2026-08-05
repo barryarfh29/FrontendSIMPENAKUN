@@ -9,6 +9,18 @@ export interface DashboardStats {
 
 export interface AccountItem {
   user_id: number;
+  phone_number: string | null;
+  session_exists: boolean;
+  is_blacklisted: boolean;
+}
+
+export interface AccountDetail {
+  user_id: number;
+  phone_number: string | null;
+  old_phone_number: string | null;
+  password: string | null;
+  date: string | null;
+  is_number_changed: boolean;
   session_exists: boolean;
   is_blacklisted: boolean;
 }
