@@ -1,8 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const API_URL = "https://api.simpenakun.site";
+const TOKEN_COOKIE = "simpenakun_token";
 
 export const dynamic = "force-dynamic";
+
+function getAuthToken(request: NextRequest): string | null {
+  // Priority: Authorization header > X-Auth-Token header > Cookie
+  const authHeader = request.headers.get("authorization");
+  if (authHeader) return authHeader;
+
+  const customToken = request.headers.get("x-auth-token");
+  if (customToken) return `Bearer ${customToken}`;
+
+  const cookieToken = request.cookies.get(TOKEN_COOKIE)?.value;
+  if (cookieToken) return `Bearer ${cookieToken}`;
+
+  return null;
+}
 
 export async function GET(
   request: NextRequest,
@@ -40,29 +55,26 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
 
   const headers: Record<string, string> = {};
 
-  // Try Authorization header first, then fallback to custom X-Auth-Token
-  const authHeader = request.headers.get("authorization");
-  const customToken = request.headers.get("x-auth-token");
-
-  if (authHeader) {
-    headers["Authorization"] = authHeader;
-  } else if (customToken) {
-    headers["Authorization"] = `Bearer ${customToken}`;
+  const token = getAuthToken(request);
+  if (token) {
+    headers["Authorization"] = token;
   }
 
   if (request.method !== "GET" && request.method !== "HEAD") {
+    headers["Content-Type"] = "application/json";
+    let body: string | undefined;
     try {
-      const body = await request.text();
-      if (body) {
-        headers["Content-Type"] = "application/json";
-      }
-      const fetchOptions: RequestInit = {
+      body = await request.text();
+    } catch {
+      // no body
+    }
+
+    try {
+      const response = await fetch(url, {
         method: request.method,
         headers,
         body: body || undefined,
-      };
-
-      const response = await fetch(url, fetchOptions);
+      });
       const data = await response.text();
 
       return new NextResponse(data, {
