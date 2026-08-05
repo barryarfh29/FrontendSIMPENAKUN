@@ -141,8 +141,9 @@ export default function AutoReactionPage() {
 
   // React channel (new task)
   const handleReactChannel = async (channelId: number | string | 0) => {
-    if (channelId !== 0) setReactingChannel(channelId);
+    // Immediately show loading
     setSendingReaction(true);
+    if (channelId !== 0) setReactingChannel(channelId);
     setError("");
     try {
       const res = await fetch("https://api.simpenakun.site/api/actions/reaction-channel", {
@@ -155,10 +156,20 @@ export default function AutoReactionPage() {
         }),
       });
       const data = await res.json();
-      if (data.success) showSuccess(data.message || "Reaction channel started!");
-      else setError(data.message || "Reaction channel gagal.");
-    } catch { setError("Gagal mengirim reaction channel."); }
-    finally { setReactingChannel(null); }
+      if (res.status === 400 && data.message?.toLowerCase().includes("already running")) {
+        showSuccess("Task sudah berjalan.");
+      } else if (data.success) {
+        showSuccess(data.message || "Reaction channel started!");
+      } else {
+        setError(data.message || "Reaction channel gagal.");
+        setSendingReaction(false);
+      }
+    } catch {
+      setError("Gagal mengirim reaction channel.");
+      setSendingReaction(false);
+    } finally {
+      setReactingChannel(null);
+    }
   };
 
   // Resume
