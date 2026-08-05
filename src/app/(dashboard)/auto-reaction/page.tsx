@@ -230,6 +230,28 @@ export default function AutoReactionPage() {
     }
   };
 
+  // Reset task
+  const [confirmReset, setConfirmReset] = useState(false);
+  const handleResetTask = async () => {
+    setError("");
+    try {
+      const res = await fetch("https://api.simpenakun.site/api/actions/reaction-channel/task", {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProgress(null);
+        setConfirmReset(false);
+        showSuccess(data.message || "Task cleared. Bisa mulai baru.");
+      } else {
+        setError(data.message || "Gagal reset task.");
+      }
+    } catch {
+      setError("Gagal reset task.");
+    }
+  };
+
   // Derived state
   const isRunning = progress?.status === "RUNNING";
   const isStopped = progress?.status === "STOPPED";
@@ -295,6 +317,18 @@ export default function AutoReactionPage() {
                 <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleResume}>
                   <Play className="mr-1 h-3 w-3" /> Resume ({progress!.remaining} remaining)
                 </Button>
+              )}
+              {isStopped && !confirmReset && (
+                <Button size="sm" variant="outline" onClick={() => setConfirmReset(true)}>
+                  Mulai Baru
+                </Button>
+              )}
+              {isStopped && confirmReset && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-destructive">Hapus task lama?</span>
+                  <Button size="sm" variant="destructive" onClick={handleResetTask}>Ya</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setConfirmReset(false)}>Batal</Button>
+                </div>
               )}
             </div>
           </CardContent>
