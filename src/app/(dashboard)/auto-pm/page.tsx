@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loading } from "@/components/loading";
 import api from "@/lib/api";
 import type { AutoPMSettings, PMTaskLogItem } from "@/types";
-import { Loader2, Save, Trash2, ChevronLeft, ChevronRight, Plus, Play, Square } from "lucide-react";
+import { Loader2, Save, Trash2, ChevronLeft, ChevronRight, Plus, Play, Square, Link2, Pencil } from "lucide-react";
 
 export default function AutoPMPage() {
   const [settings, setSettings] = useState<AutoPMSettings | null>(null);
@@ -22,8 +22,14 @@ export default function AutoPMPage() {
 
   // PM Channels
   const [pmChannels, setPmChannels] = useState<(string | number)[]>([]);
+  const [inviteLinks, setInviteLinks] = useState<Record<string, string>>({});
   const [newPmChannel, setNewPmChannel] = useState("");
   const [savingChannels, setSavingChannels] = useState(false);
+
+  // Edit invite link
+  const [editingChannel, setEditingChannel] = useState<string | null>(null);
+  const [editLinkValue, setEditLinkValue] = useState("");
+  const [savingLink, setSavingLink] = useState(false);
 
   // Run Now
   const [runMaxAccounts, setRunMaxAccounts] = useState(5);
@@ -53,14 +59,23 @@ export default function AutoPMPage() {
     setTimeout(() => setSuccess(""), 5000);
   };
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("simpenakun_token");
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
+
   const fetchAll = async () => {
     try {
       const [settingsRes, channelsRes] = await Promise.all([
         api.get("/settings/auto-pm"),
-        api.get("/settings/pm-channels").catch(() => ({ data: { channels: [] } })),
+        api.get("/settings/pm-channels").catch(() => ({ data: { channels: [], invite_links: {} } })),
       ]);
       setSettings(settingsRes.data);
       setPmChannels(channelsRes.data?.channels || []);
+      setInviteLinks(channelsRes.data?.invite_links || {});
     } catch (err: any) {
       setError("Gagal memuat settings.");
     } finally {
@@ -127,7 +142,42 @@ export default function AutoPMPage() {
   };
 
   const removePmChannel = (index: number) => {
+    const removed = pmChannels[index];
     setPmChannels((prev) => prev.filter((_, i) => i !== index));
+    // Also remove invite link
+    const key = String(removed);
+    if (inviteLinks[key]) {
+      const updated = { ...inviteLinks };
+      delete updated[key];
+      setInviteLinks(updated);
+    }
+  };
+
+  // Invite Link
+  const startEditLink = (channelId: string | number) => {
+    const key = String(channelId);
+    setEditingChannel(key);
+    setEditLinkValue(inviteLinks[key] || "");
+  };
+
+  const saveInviteLink = async () => {
+    if (!editingChannel) return;
+    setSavingLink(true);
+    setError("");
+    try {
+      const res = await fetch(
+        `https://api.simpenakun.site/api/settings/pm-channels/invite-link?channel_id=${editingChannel}&invite_link=${encodeURIComponent(editLinkValue)}`,
+        { method: "PUT", headers: getAuthHeaders() }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setInviteLinks((prev) => ({ ...prev, [editingChannel!]: editLinkValue }));
+      setEditingChannel(null);
+      showSuccess("Invite link saved!");
+    } catch (err: any) {
+      setError("Gagal menyimpan invite link.");
+    } finally {
+      setSavingLink(false);
+    }
   };
 
   // Run Now
@@ -135,13 +185,9 @@ export default function AutoPMPage() {
     setRunning(true);
     setError("");
     try {
-      const token = localStorage.getItem("simpenakun_token");
       const res = await fetch("https://api.simpenakun.site/api/actions/trigger-pm", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           channel_id: 0,
           max_accounts: runMaxAccounts,
@@ -166,10 +212,9 @@ export default function AutoPMPage() {
 
   const handleStopPm = async () => {
     try {
-      const token = localStorage.getItem("simpenakun_token");
       await fetch("https://api.simpenakun.site/api/actions/stop/pm", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: getAuthHeaders(),
       });
       showSuccess("Stop signal sent. Menunggu proses berhenti...");
     } catch {
@@ -221,7 +266,7 @@ export default function AutoPMPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Channel untuk scan target CS (terpisah dari Auto Reaction)
+            Channel untuk scan target CS. Channel private HARUS punya invite link agar scanner bisa join dan baca post.
           </p>
           <div className="flex gap-2">
             <Input
@@ -234,17 +279,71 @@ export default function AutoPMPage() {
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {pmChannels.map((id, index) => (
-              <div key={index} className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-mono">
-                {id}
-                <button onClick={() => removePmChannel(index)} className="ml-1 text-destructive hover:text-destructive/80">×</button>
-              </div>
-            ))}
-            {pmChannels.length === 0 && (
-              <p className="text-sm text-muted-foreground">Belum ada channel.</p>
-            )}
-          </div>
+
+          {/* Channel list with invite links */}
+          {pmChannels.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="px-3 py-2 text-left font-medium">Channel ID</th>
+                    <th className="px-3 py-2 text-left font-medium">Invite Link</th>
+                    <th className="px-3 py-2 text-right font-medium">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pmChannels.map((id, index) => {
+                    const key = String(id);
+                    const link = inviteLinks[key];
+                    const isEditing = editingChannel === key;
+                    return (
+                      <tr key={index} className="border-b">
+                        <td className="px-3 py-2 font-mono text-xs">{id}</td>
+                        <td className="px-3 py-2">
+                          {isEditing ? (
+                            <div className="flex gap-2">
+                              <Input
+                                className="h-8 text-xs"
+                                placeholder="https://t.me/+abcdef123"
+                                value={editLinkValue}
+                                onChange={(e) => setEditLinkValue(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && saveInviteLink()}
+                              />
+                              <Button size="sm" onClick={saveInviteLink} disabled={savingLink}>
+                                {savingLink ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setEditingChannel(null)}>
+                                ✕
+                              </Button>
+                            </div>
+                          ) : link ? (
+                            <span className="text-xs text-muted-foreground font-mono">{link}</span>
+                          ) : (
+                            <span className="text-xs text-orange-500">⚠️ Tidak ada invite link</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {!isEditing && (
+                              <Button size="sm" variant="ghost" onClick={() => startEditLink(id)}>
+                                {link ? <Pencil className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
+                              </Button>
+                            )}
+                            <Button size="sm" variant="ghost" onClick={() => removePmChannel(index)}>
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Belum ada channel.</p>
+          )}
+
           <Button onClick={savePmChannels} disabled={savingChannels} size="sm">
             {savingChannels ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save Channels
