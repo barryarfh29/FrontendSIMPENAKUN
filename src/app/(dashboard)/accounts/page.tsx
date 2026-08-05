@@ -21,7 +21,7 @@ export default function AccountsPage() {
 
   const fetchAccounts = async () => {
     try {
-      const response = await api.get("/accounts");
+      const response = await api.get("/accounts/");
       const resData = response.data;
       if (Array.isArray(resData)) {
         setAccounts(resData);
