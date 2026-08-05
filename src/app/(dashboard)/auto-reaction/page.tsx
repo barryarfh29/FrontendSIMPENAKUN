@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +28,7 @@ export default function AutoReactionPage() {
   // Trigger reaction (by link)
   const [reactionLink, setReactionLink] = useState("");
   const [reactionDelay, setReactionDelay] = useState(5);
-  const [sendingReaction, setSendingReaction] = useState(false);
+  const [sendingLink, setSendingLink] = useState(false);
 
   // React channels
   const [reactLimit, setReactLimit] = useState(5);
@@ -37,6 +37,8 @@ export default function AutoReactionPage() {
 
   // Progress
   const [progress, setProgress] = useState<ReactChannelProgress | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   // Account count
   const [accountCount, setAccountCount] = useState(0);
@@ -49,35 +51,53 @@ export default function AutoReactionPage() {
     };
   }, []);
 
-  // Poll progress
-  useEffect(() => {
-    const pollProgress = async () => {
-      try {
-        const res = await api.get("/actions/reaction-channel/progress");
-        setProgress(res.data);
-        const isRunning = res.data?.status === "RUNNING";
-        setSendingReaction(isRunning);
-      } catch {
-        // fallback to status endpoint
-        try {
-          const res = await api.get("/actions/status");
-          setSendingReaction(res.data?.running?.reaction || false);
-        } catch { /* silent */ }
-      }
-    };
-    pollProgress();
-    const interval = setInterval(pollProgress, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    fetchAll();
-  }, []);
-
   const showSuccess = (msg: string) => {
     setSuccess(msg);
     setTimeout(() => setSuccess(""), 5000);
   };
+
+  // Polling
+  const pollProgress = useCallback(async () => {
+    try {
+      const res = await api.get("/actions/reaction-channel/progress");
+      setProgress(res.data);
+      if (res.data?.status === "DONE" || res.data?.status === "NONE") {
+        setStopping(false);
+      }
+      if (res.data?.status === "STOPPED") {
+        setStopping(false);
+      }
+    } catch {
+      // fallback
+      try {
+        const res = await api.get("/actions/status");
+        if (!res.data?.running?.reaction) {
+          setProgress((prev) => prev && prev.status === "RUNNING" ? { ...prev, status: "STOPPED" } : prev);
+        }
+      } catch { /* silent */ }
+    }
+  }, []);
+
+  const startPolling = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(pollProgress, 3000);
+  }, [pollProgress]);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    fetchAll();
+    pollProgress();
+    startPolling();
+    return () => stopPolling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchAll = async () => {
     try {
@@ -96,17 +116,15 @@ export default function AutoReactionPage() {
     }
   };
 
+  // Save channels
   const saveChannels = async () => {
     setSaving(true);
     setError("");
     try {
       await api.put("/settings/reaction-channels", { channels });
       showSuccess("Reaction channels saved!");
-    } catch (err: any) {
-      setError("Gagal menyimpan channels.");
-    } finally {
-      setSaving(false);
-    }
+    } catch { setError("Gagal menyimpan channels."); }
+    finally { setSaving(false); }
   };
 
   const addChannel = () => {
@@ -124,7 +142,7 @@ export default function AutoReactionPage() {
   // React by link
   const handleSendReaction = async () => {
     if (!reactionLink.trim()) { setError("Link post harus diisi."); return; }
-    setSendingReaction(true);
+    setSendingLink(true);
     setError("");
     try {
       const res = await fetch("https://api.simpenakun.site/api/actions/reaction", {
@@ -136,13 +154,13 @@ export default function AutoReactionPage() {
       if (data.success) showSuccess(data.message || "Reaction selesai!");
       else setError(data.message || "Reaction gagal.");
     } catch { setError("Gagal mengirim reaction."); }
-    finally { setSendingReaction(false); }
+    finally { setSendingLink(false); }
   };
 
   // React channel (new task)
   const handleReactChannel = async (channelId: number | string | 0) => {
-    // Immediately show loading
-    setSendingReaction(true);
+    // Immediately update UI
+    setProgress({ status: "RUNNING", total: 0, completed: 0, remaining: 0, started_at: new Date().toISOString() });
     if (channelId !== 0) setReactingChannel(channelId);
     setError("");
     try {
@@ -156,17 +174,17 @@ export default function AutoReactionPage() {
         }),
       });
       const data = await res.json();
-      if (res.status === 400 && data.message?.toLowerCase().includes("already running")) {
-        showSuccess("Task sudah berjalan.");
+      if (res.status === 400) {
+        showSuccess(data.message || "Task sudah berjalan.");
       } else if (data.success) {
         showSuccess(data.message || "Reaction channel started!");
       } else {
         setError(data.message || "Reaction channel gagal.");
-        setSendingReaction(false);
+        setProgress(null);
       }
     } catch {
       setError("Gagal mengirim reaction channel.");
-      setSendingReaction(false);
+      setProgress(null);
     } finally {
       setReactingChannel(null);
     }
@@ -174,7 +192,7 @@ export default function AutoReactionPage() {
 
   // Resume
   const handleResume = async () => {
-    setSendingReaction(true);
+    setProgress((prev) => prev ? { ...prev, status: "RUNNING" } : prev);
     setError("");
     try {
       const res = await fetch("https://api.simpenakun.site/api/actions/reaction-channel", {
@@ -183,31 +201,46 @@ export default function AutoReactionPage() {
         body: JSON.stringify({ resume: true }),
       });
       const data = await res.json();
-      if (data.success) showSuccess(data.message || "Resumed!");
-      else setError(data.message || "Resume gagal.");
-    } catch { setError("Gagal resume."); }
+      if (res.status === 400) {
+        showSuccess(data.message || "Task sudah berjalan.");
+      } else if (data.success) {
+        showSuccess(data.message || "Resumed!");
+      } else {
+        setError(data.message || "Resume gagal.");
+        await pollProgress();
+      }
+    } catch {
+      setError("Gagal resume.");
+      await pollProgress();
+    }
   };
 
   // Stop
   const handleStopReaction = async () => {
+    setStopping(true);
     try {
       await fetch("https://api.simpenakun.site/api/actions/stop/reaction", {
         method: "POST",
         headers: getAuthHeaders(),
       });
-      showSuccess("Stop signal sent.");
-    } catch { setError("Gagal mengirim stop signal."); }
+      showSuccess("Stop signal sent. Menunggu proses berhenti...");
+    } catch {
+      setError("Gagal mengirim stop signal.");
+      setStopping(false);
+    }
   };
 
-  const reactionEstimate = Math.ceil((accountCount * reactionDelay) / 60);
-  const reactAllEstimate = Math.ceil((channels.length * reactLimit * accountCount * reactDelay) / 60);
-
+  // Derived state
+  const isRunning = progress?.status === "RUNNING";
+  const isStopped = progress?.status === "STOPPED";
+  const isDone = progress?.status === "DONE";
+  const hasProgress = progress && progress.status !== "NONE";
   const progressPercent = progress && progress.total > 0
     ? Math.round((progress.completed / progress.total) * 100)
     : 0;
 
-  const showResume = progress && (progress.status === "STOPPED" || (progress.status === "RUNNING" && progress.remaining > 0));
-  const isRunning = progress?.status === "RUNNING";
+  const reactionEstimate = Math.ceil((accountCount * reactionDelay) / 60);
+  const reactAllEstimate = Math.ceil((channels.length * reactLimit * accountCount * reactDelay) / 60);
 
   if (loading) return <Loading />;
 
@@ -222,38 +255,45 @@ export default function AutoReactionPage() {
       {success && <p className="text-sm text-green-500">{success}</p>}
 
       {/* Progress Bar */}
-      {progress && progress.status !== "NONE" && (
+      {hasProgress && (
         <Card>
           <CardContent className="pt-6 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">
-                {progress.status === "RUNNING" && "⚡ Reaction sedang berjalan"}
-                {progress.status === "STOPPED" && "⏸️ Reaction dihentikan"}
-                {progress.status === "DONE" && "✅ Reaction selesai"}
+                {isRunning && (stopping ? "⏳ Menghentikan..." : "⚡ Reaction sedang berjalan")}
+                {isStopped && "⏸️ Reaction dihentikan"}
+                {isDone && "✅ Reaction selesai"}
               </span>
               <span className="text-sm text-muted-foreground">
-                {progress.completed}/{progress.total} posts ({progress.remaining} remaining)
+                {progress!.completed}/{progress!.total} posts ({progress!.remaining} remaining)
               </span>
             </div>
-            {/* Progress bar */}
+            {/* Bar */}
             <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  progress.status === "RUNNING" ? "bg-primary" :
-                  progress.status === "DONE" ? "bg-green-500" : "bg-orange-500"
+                  isRunning ? "bg-primary animate-pulse" :
+                  isDone ? "bg-green-500" : "bg-orange-500"
                 }`}
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
+            <p className="text-xs text-muted-foreground">{progressPercent}% complete</p>
+            {/* Actions */}
             <div className="flex gap-2">
-              {isRunning && (
+              {isRunning && !stopping && (
                 <Button variant="destructive" size="sm" onClick={handleStopReaction}>
                   <Square className="mr-1 h-3 w-3" /> Stop
                 </Button>
               )}
-              {progress.status === "STOPPED" && progress.remaining > 0 && (
+              {isRunning && stopping && (
+                <Button variant="outline" size="sm" disabled>
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Menghentikan...
+                </Button>
+              )}
+              {isStopped && progress!.remaining > 0 && (
                 <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleResume}>
-                  <Play className="mr-1 h-3 w-3" /> Resume ({progress.remaining} remaining)
+                  <Play className="mr-1 h-3 w-3" /> Resume ({progress!.remaining} remaining)
                 </Button>
               )}
             </div>
@@ -273,7 +313,7 @@ export default function AutoReactionPage() {
               placeholder="https://t.me/channel/123"
               value={reactionLink}
               onChange={(e) => setReactionLink(e.target.value)}
-              disabled={isRunning}
+              disabled={isRunning || sendingLink}
             />
           </div>
           <div className="space-y-2">
@@ -282,7 +322,7 @@ export default function AutoReactionPage() {
               type="number" min={1} max={60}
               value={reactionDelay}
               onChange={(e) => setReactionDelay(Math.max(1, parseInt(e.target.value) || 5))}
-              disabled={isRunning}
+              disabled={isRunning || sendingLink}
             />
           </div>
           {accountCount > 0 && (
@@ -291,8 +331,9 @@ export default function AutoReactionPage() {
             </p>
           )}
           {!isRunning && (
-            <Button className="w-full bg-green-600 hover:bg-green-700 text-white" onClick={handleSendReaction}>
-              <Send className="mr-2 h-4 w-4" /> Kirim Reaction
+            <Button className="w-full bg-green-600 hover:bg-green-700 text-white" onClick={handleSendReaction} disabled={sendingLink}>
+              {sendingLink ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+              {sendingLink ? "Mengirim..." : "Kirim Reaction"}
             </Button>
           )}
         </CardContent>
@@ -309,7 +350,7 @@ export default function AutoReactionPage() {
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Jumlah post terakhir (limit)</Label>
+              <Label>Jumlah post (limit)</Label>
               <Input
                 type="number" min={1} max={999}
                 value={reactLimit}
