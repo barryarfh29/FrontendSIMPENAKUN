@@ -14,6 +14,8 @@ api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    // Also send via custom header as backup (in case Authorization is stripped)
+    config.headers["X-Auth-Token"] = token;
   }
   return config;
 });
@@ -21,7 +23,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
       // Don't redirect on login attempt failure
       const isLoginRequest = error.config?.url?.includes("auth/login");
       if (!isLoginRequest) {

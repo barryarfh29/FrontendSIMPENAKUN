@@ -40,32 +40,51 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
 
   const headers: Record<string, string> = {};
 
+  // Try Authorization header first, then fallback to custom X-Auth-Token
   const authHeader = request.headers.get("authorization");
+  const customToken = request.headers.get("x-auth-token");
+
   if (authHeader) {
     headers["Authorization"] = authHeader;
+  } else if (customToken) {
+    headers["Authorization"] = `Bearer ${customToken}`;
   }
-
-  const fetchOptions: RequestInit = {
-    method: request.method,
-    headers,
-  };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
     try {
       const body = await request.text();
       if (body) {
         headers["Content-Type"] = "application/json";
-        fetchOptions.body = body;
       }
-    } catch {
-      // no body
+      const fetchOptions: RequestInit = {
+        method: request.method,
+        headers,
+        body: body || undefined,
+      };
+
+      const response = await fetch(url, fetchOptions);
+      const data = await response.text();
+
+      return new NextResponse(data, {
+        status: response.status,
+        headers: {
+          "Content-Type": response.headers.get("content-type") || "application/json",
+        },
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: "Failed to connect to API" },
+        { status: 502 }
+      );
     }
   }
 
-  fetchOptions.headers = headers;
-
+  // GET/HEAD requests
   try {
-    const response = await fetch(url, fetchOptions);
+    const response = await fetch(url, {
+      method: request.method,
+      headers,
+    });
     const data = await response.text();
 
     return new NextResponse(data, {
